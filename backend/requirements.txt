@@ -1,3 +1,6 @@
-uvicorn
 fastapi
+uvicorn
+requests
 edge-tts
+chromadb
+sentence-transformers
