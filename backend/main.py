@@ -155,6 +155,7 @@ async def speak(req: SpeakRequest):
     from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 import asyncio
+import threading
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
@@ -196,11 +197,15 @@ async def telegram_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await update.message.reply_text("I’m having trouble thinking right now.")
 
-@app.on_event("startup")
-async def startup_event():
+def run_telegram_bot():
     app_tg = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 
     app_tg.add_handler(CommandHandler("start", start))
     app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, telegram_chat))
 
-    asyncio.create_task(app_tg.run_polling())
+    app_tg.run_polling(close_loop=False)
+
+
+@app.on_event("startup")
+async def startup_event():
+    threading.Thread(target=run_telegram_bot, daemon=True).start()
