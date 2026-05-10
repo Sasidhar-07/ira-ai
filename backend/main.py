@@ -151,3 +151,56 @@ async def speak(req: SpeakRequest):
     except Exception as e:
         print("EDGE TTS ERROR:", str(e))
         return {"error": str(e)}
+    
+    from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+import asyncio
+
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Hi, I'm Ira. Talk to me ❤️")
+
+async def telegram_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_message = update.message.text
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Content-Type": "application/json",
+        }
+
+        res = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers=headers,
+            json={
+                "model": "openrouter/free",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are Ira, a warm emotional AI mentor. Keep replies short and human."
+                    },
+                    {
+                        "role": "user",
+                        "content": user_message
+                    }
+                ]
+            }
+        )
+
+        data = res.json()
+        reply = data["choices"][0]["message"]["content"]
+
+        await update.message.reply_text(reply)
+
+    except Exception:
+        await update.message.reply_text("I’m having trouble thinking right now.")
+
+@app.on_event("startup")
+async def startup_event():
+    app_tg = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+
+    app_tg.add_handler(CommandHandler("start", start))
+    app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, telegram_chat))
+
+    asyncio.create_task(app_tg.run_polling())
