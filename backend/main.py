@@ -4,6 +4,10 @@ import tempfile
 import os
 import requests
 
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+import tempfile
+import openai
+
 from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
@@ -44,6 +48,31 @@ def retrieve_memories(query):
     return ""
 
 
+async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    voice = await update.message.voice.get_file()
+
+    with tempfile.NamedTemporaryFile(suffix=".ogg") as temp:
+        await voice.download_to_drive(temp.name)
+
+        with open(temp.name, "rb") as audio:
+            transcript = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio
+            )
+
+    user_message = transcript.text
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are Ira, emotional AI mentor."},
+            {"role": "user", "content": user_message}
+        ]
+    )
+
+    reply = response.choices[0].message.content
+    await update.message.reply_text(reply)
+    
 @app.post("/chat")
 async def chat(req: ChatRequest):
     try:
@@ -157,6 +186,9 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 import asyncio
 import threading
 
+import tempfile
+import openai
+
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -208,4 +240,12 @@ def run_telegram_bot():
 
 @app.on_event("startup")
 async def startup_event():
-    threading.Thread(target=run_telegram_bot, daemon=True).start()
+    app_tg = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+
+    app_tg.add_handler(CommandHandler("start", start))
+    app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, telegram_chat))
+    app_tg.add_handler(MessageHandler(filters.VOICE, voice_handler))   # ADD HERE
+
+    asyncio.create_task(app_tg.run_polling())
+
+    
