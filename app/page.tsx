@@ -92,7 +92,7 @@ export default function Home() {
         setListening(false);
         setThinking(true);
 
-        const res = await fetch("http://127.0.0.1:8000/chat", {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/chat`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -116,7 +116,7 @@ export default function Home() {
           { role: "ai", text: data.response },
         ]);
 
-        const audioRes = await fetch("http://127.0.0.1:8000/speak", {
+        const audioRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/speak`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
