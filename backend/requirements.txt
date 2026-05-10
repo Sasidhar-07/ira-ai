@@ -5,3 +5,4 @@ edge-tts
 python-telegram-bot
 python-dotenv
 pydantic
+openai
