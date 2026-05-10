@@ -3,8 +3,6 @@ import edge_tts
 import tempfile
 import os
 import requests
-import chromadb
-from sentence_transformers import SentenceTransformer
 
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -23,10 +21,6 @@ app.add_middleware(
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-client = chromadb.PersistentClient(path="./memory_db")
-collection = client.get_or_create_collection("ira_memory")
-embedder = SentenceTransformer("all-MiniLM-L6-v2")
-
 
 class ChatRequest(BaseModel):
     message: str
@@ -41,56 +35,12 @@ async def root():
     return {"message": "Backend running"}
 
 
-def detect_memory_type(text):
-    msg = text.lower()
-
-    if "my name is" in msg or "i am " in msg:
-        return "identity"
-
-    if "job" in msg or "placement" in msg or "career" in msg:
-        return "career"
-
-    if "stress" in msg or "sad" in msg or "lonely" in msg or "anxious" in msg:
-        return "emotions"
-
-    if "like" in msg or "love" in msg or "prefer" in msg:
-        return "preferences"
-
-    if "friend" in msg or "family" in msg or "mother" in msg or "father" in msg:
-        return "relationships"
-
-    return "general"
-
-
+# lightweight placeholder memory (for deploy now)
 def store_memory(text):
-    if not text or not text.strip():
-        return
-
-    embedding = embedder.encode(text).tolist()
-    category = detect_memory_type(text)
-
-    collection.add(
-        documents=[text],
-        embeddings=[embedding],
-        metadatas=[{"category": category}],
-        ids=[str(hash(text + str(os.urandom(4))))]
-    )
+    return
 
 
 def retrieve_memories(query):
-    if not query or not query.strip():
-        return ""
-
-    embedding = embedder.encode(query).tolist()
-
-    results = collection.query(
-        query_embeddings=[embedding],
-        n_results=5
-    )
-
-    if results["documents"] and len(results["documents"]) > 0:
-        return "\n".join(results["documents"][0])
-
     return ""
 
 
@@ -105,12 +55,10 @@ async def chat(req: ChatRequest):
         memories = retrieve_memories(user_message)
 
         system_prompt = f"""
-You are Ira, an emotionally intelligent AI mentor with structured long-term memory.
+You are Ira, an emotionally intelligent AI mentor.
 
 Known memories:
 {memories}
-
-Use memories naturally.
 
 Be warm, human, emotionally intelligent.
 Maximum 2 short sentences.
@@ -140,14 +88,10 @@ No emojis.
             timeout=30
         )
 
-        print("STATUS:", res.status_code)
-
-        data = res.json()
-        print("OPENROUTER:", data)
-
         if res.status_code != 200:
             return {"response": f"API error {res.status_code}"}
 
+        data = res.json()
         reply = data["choices"][0]["message"]["content"]
 
         if not reply:
@@ -162,6 +106,7 @@ No emojis.
         print("CHAT ERROR:", e)
         return {"response": "Backend crashed"}
 
+
 @app.post("/speak")
 async def speak(req: SpeakRequest):
     try:
@@ -175,21 +120,19 @@ async def speak(req: SpeakRequest):
         lower = clean_text.lower()
 
         if any(word in lower for word in ["sad", "lonely", "cry", "hurt"]):
-            voice = "en-IN-NeerjaNeural"   # soft female
+            voice = "en-IN-NeerjaNeural"
 
         elif any(word in lower for word in ["stress", "anxious", "worried", "panic"]):
-            voice = "en-US-JennyNeural"    # calming
+            voice = "en-US-JennyNeural"
 
         elif any(word in lower for word in ["happy", "excited", "great", "awesome"]):
-            voice = "en-US-AriaNeural"     # energetic
+            voice = "en-US-AriaNeural"
 
         elif any(word in lower for word in ["angry", "frustrated", "mad"]):
-            voice = "en-GB-SoniaNeural"    # composed
+            voice = "en-GB-SoniaNeural"
 
         else:
-            voice = "en-IN-NeerjaNeural"   # default
-
-        print("VOICE USED:", voice)
+            voice = "en-IN-NeerjaNeural"
 
         communicate = edge_tts.Communicate(clean_text, voice)
 
