@@ -203,7 +203,7 @@ def run_telegram_bot():
     app_tg.add_handler(CommandHandler("start", start))
     app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, telegram_chat))
 
-    app_tg.run_polling(close_loop=False)
+    app_tg.run_polling(close_loop=False, stop_signals=None)
 
 
 @app.on_event("startup")
