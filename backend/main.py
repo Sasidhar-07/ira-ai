@@ -48,8 +48,30 @@ def retrieve_memories(query):
     return ""
 
 
+async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    voice = await update.message.voice.get_file()
 
+    with tempfile.NamedTemporaryFile(suffix=".ogg") as temp:
+        await voice.download_to_drive(temp.name)
 
+        with open(temp.name, "rb") as audio:
+            transcript = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio
+            )
+
+    user_message = transcript.text
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are Ira, emotional AI mentor."},
+            {"role": "user", "content": user_message}
+        ]
+    )
+
+    reply = response.choices[0].message.content
+    await update.message.reply_text(reply)
     
 @app.post("/chat")
 async def chat(req: ChatRequest):
@@ -207,13 +229,20 @@ async def telegram_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await update.message.reply_text("I’m having trouble thinking right now.")
 
-def run_telegram_bot():
+@app.on_event("startup")
+async def startup_event():
+    if not TELEGRAM_BOT_TOKEN:
+        print("TELEGRAM_BOT_TOKEN missing")
+        return
+
     app_tg = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 
     app_tg.add_handler(CommandHandler("start", start))
     app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, telegram_chat))
 
-    app_tg.run_polling(close_loop=False, stop_signals=None)
+    await app_tg.initialize()
+    await app_tg.start()
+    await app_tg.updater.start_polling()
 
 
 @app.on_event("startup")
@@ -222,8 +251,6 @@ async def startup_event():
 
     app_tg.add_handler(CommandHandler("start", start))
     app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, telegram_chat))
-       # ADD HERE
+     # ADD HERE
 
     asyncio.create_task(app_tg.run_polling())
-
-    
