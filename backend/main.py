@@ -25,7 +25,6 @@ app.add_middleware(
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-
 class ChatRequest(BaseModel):
     message: str
 
@@ -229,19 +228,38 @@ async def telegram_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await update.message.reply_text("I’m having trouble thinking right now.")
 
-telegram_app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
-
-telegram_app.add_handler(CommandHandler("start", start))
-telegram_app.add_handler(
-    MessageHandler(filters.TEXT & ~filters.COMMAND, telegram_chat)
-)
-
 @app.post("/telegram")
 async def telegram_webhook(req: dict):
-    update = Update.de_json(req, telegram_app.bot)
-    await telegram_app.initialize()
-    await telegram_app.process_update(update)
-    return {"ok": True}
+    try:
+        message = req.get("message", {})
+        chat = message.get("chat", {})
+        chat_id = chat.get("id")
+        text = message.get("text", "")
+
+        if not chat_id:
+            return {"ok": True}
+
+        if text == "/start":
+            reply = "Hi, I'm Ira. Talk to me ❤️"
+        elif text:
+            reply = get_ira_reply(text)
+        else:
+            reply = "Send me a text message for now."
+
+        requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+            json={
+                "chat_id": chat_id,
+                "text": reply
+            },
+            timeout=10
+        )
+
+        return {"ok": True}
+
+    except Exception as e:
+        print("TELEGRAM WEBHOOK ERROR:", e)
+        return {"ok": False}
 
 
 
