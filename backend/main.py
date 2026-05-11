@@ -229,28 +229,19 @@ async def telegram_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await update.message.reply_text("I’m having trouble thinking right now.")
 
-@app.on_event("startup")
-async def startup_event():
-    if not TELEGRAM_BOT_TOKEN:
-        print("TELEGRAM_BOT_TOKEN missing")
-        return
+telegram_app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 
-    app_tg = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+telegram_app.add_handler(CommandHandler("start", start))
+telegram_app.add_handler(
+    MessageHandler(filters.TEXT & ~filters.COMMAND, telegram_chat)
+)
 
-    app_tg.add_handler(CommandHandler("start", start))
-    app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, telegram_chat))
+@app.post("/telegram")
+async def telegram_webhook(req: dict):
+    update = Update.de_json(req, telegram_app.bot)
+    await telegram_app.initialize()
+    await telegram_app.process_update(update)
+    return {"ok": True}
 
-    await app_tg.initialize()
-    await app_tg.start()
-    await app_tg.updater.start_polling()
 
 
-@app.on_event("startup")
-async def startup_event():
-    app_tg = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
-
-    app_tg.add_handler(CommandHandler("start", start))
-    app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, telegram_chat))
-     # ADD HERE
-
-    asyncio.create_task(app_tg.run_polling())
