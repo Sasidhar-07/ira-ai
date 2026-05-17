@@ -229,37 +229,27 @@ async def telegram_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("I’m having trouble thinking right now.")
 
 @app.post("/telegram")
-async def telegram_webhook(req: dict):
-    try:
-        message = req.get("message", {})
-        chat = message.get("chat", {})
-        chat_id = chat.get("id")
-        text = message.get("text", "")
+async def telegram_webhook(request: Request):
+    data = await request.json()
 
-        if not chat_id:
-            return {"ok": True}
+    message = data.get("message", {})
+    chat_id = message.get("chat", {}).get("id")
+    user_message = message.get("text", "")
 
-        if text == "/start":
-            reply = "Hi, I'm Ira. Talk to me ❤️"
-        elif text:
-            reply = get_ira_reply(text)
-        else:
-            reply = "Send me a text message for now."
-
-        requests.post(
-            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
-            json={
-                "chat_id": chat_id,
-                "text": reply
-            },
-            timeout=10
-        )
-
+    if not chat_id or not user_message:
         return {"ok": True}
 
-    except Exception as e:
-        print("TELEGRAM WEBHOOK ERROR:", e)
-        return {"ok": False}
+    reply = await get_ira_reply(user_message)
+
+    telegram_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+
+    async with httpx.AsyncClient() as client:
+        await client.post(telegram_url, json={
+            "chat_id": chat_id,
+            "text": reply
+        })
+
+    return {"ok": True}
 
 
 
