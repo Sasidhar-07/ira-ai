@@ -242,7 +242,7 @@ async def telegram_webhook(req: dict):
         if text == "/start":
             reply = "Hi, I'm Ira. Talk to me ❤️"
         elif text:
-            reply = "You said: " + text
+            reply = chat_with_ira(text)
         else:
             reply = "Send me a text message for now."
 
