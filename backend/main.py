@@ -193,40 +193,38 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Hi, I'm Ira. Talk to me ❤️")
 
-async def telegram_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_message = update.message.text
-
+async def get_ira_reply(message):
     try:
-        headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json",
-        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": "openai/gpt-4o-mini",
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "You are Ira, a warm emotional AI mentor. Speak naturally, kindly, and supportively."
+                        },
+                        {
+                            "role": "user",
+                            "content": message
+                        }
+                    ]
+                }
+            )
 
-        res = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers=headers,
-            json={
-                "model": "openrouter/free",
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": "You are Ira, a warm emotional AI mentor. Keep replies short and human."
-                    },
-                    {
-                        "role": "user",
-                        "content": user_message
-                    }
-                ]
-            }
-        )
+            data = response.json()
+            print(data)
 
-        data = res.json()
-        reply = data["choices"][0]["message"]["content"]
+            return data["choices"][0]["message"]["content"]
 
-        await update.message.reply_text(reply)
-
-    except Exception:
-        await update.message.reply_text("I’m having trouble thinking right now.")
+    except Exception as e:
+        print("IRA ERROR:", e)
+        return "I'm here with you ❤️ Tell me what's on your mind."
 
 @app.post("/telegram")
 async def telegram_webhook(request: Request):
