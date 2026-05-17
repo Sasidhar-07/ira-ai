@@ -237,7 +237,7 @@ async def telegram_webhook(request: Request):
     if not chat_id or not user_message:
         return {"ok": True}
 
-    reply = await get_ira_reply(user_message)
+    reply = get_ira_reply(text)
 
     telegram_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
 
