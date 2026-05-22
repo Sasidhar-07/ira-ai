@@ -1,14 +1,10 @@
 import re
-import edge_tts
-import tempfile
 import os
-import requests
-
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 import tempfile
-import openai
+import requests
+import edge_tts
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
@@ -24,6 +20,8 @@ app.add_middleware(
 )
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+TELEGRAM_BOT_TOKEN = os.getenv("7611366225:AAFVaZUFT7YUBaOB5CWZPP8Gxn0nkd-JlsA")
+
 
 class ChatRequest(BaseModel):
     message: str
@@ -38,193 +36,66 @@ async def root():
     return {"message": "Backend running"}
 
 
-# lightweight placeholder memory (for deploy now)
-def store_memory(text):
-    return
-
-
-def retrieve_memories(query):
-    return ""
-
-
-async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    voice = await update.message.voice.get_file()
-
-    with tempfile.NamedTemporaryFile(suffix=".ogg") as temp:
-        await voice.download_to_drive(temp.name)
-
-        with open(temp.name, "rb") as audio:
-            transcript = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=audio
-            )
-
-    user_message = transcript.text
-
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are Ira, emotional AI mentor."},
-            {"role": "user", "content": user_message}
-        ]
-    )
-
-    reply = response.choices[0].message.content
-    await update.message.reply_text(reply)
-    
-@app.post("/chat")
-async def chat(req: ChatRequest):
+def get_ira_reply(user_message: str):
     try:
-        user_message = req.message or ""
-
-        if not user_message.strip():
-            return {"response": "I didn’t hear that clearly."}
-
-        memories = retrieve_memories(user_message)
-
-        system_prompt = f"""
-You are Ira, an emotionally intelligent AI mentor.
-
-Known memories:
-{memories}
-
-Be warm, human, emotionally intelligent.
-Maximum 2 short sentences.
-No markdown.
-No emojis.
-"""
-
-        headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY.strip()}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "http://localhost:3000",
-            "X-Title": "Ira Voice AI",
-        }
-
         res = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
-            headers=headers,
-            json={
-                "model": "openrouter/free",
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message}
-                ],
-                "max_tokens": 100,
-                "temperature": 0.8
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
             },
-            timeout=30
+            json={
+                "model": "deepseek/deepseek-chat-v3-0324:free",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are Ira, a warm emotional AI friend. Reply like a real close friend: caring, natural, short, and human. No markdown."
+                    },
+                    {"role": "user", "content": user_message},
+                ],
+                "max_tokens": 120,
+                "temperature": 0.8,
+            },
+            timeout=30,
         )
 
-        if res.status_code != 200:
-            return {"response": f"API error {res.status_code}"}
-
         data = res.json()
-        reply = data["choices"][0]["message"]["content"]
+        print("OPENROUTER:", data)
 
-        if not reply:
-            reply = "Hmm, I lost my thought."
+        if "choices" not in data:
+            return "I'm here with you. Tell me what happened."
 
-        store_memory(user_message)
-        store_memory(reply)
-
-        return {"response": reply}
+        return data["choices"][0]["message"]["content"]
 
     except Exception as e:
-        print("CHAT ERROR:", e)
-        return {"response": "Backend crashed"}
+        print("IRA ERROR:", e)
+        return "I'm here with you. Tell me what happened."
+
+
+@app.post("/chat")
+async def chat(req: ChatRequest):
+    return {"response": get_ira_reply(req.message or "")}
 
 
 @app.post("/speak")
 async def speak(req: SpeakRequest):
-    try:
-        text = req.text or ""
+    text = req.text or "I am here with you."
+    clean_text = re.sub(r"[^\w\s.,!?'-]", "", text)
 
-        clean_text = re.sub(r"[^\w\s.,!?'-]", "", text)
+    communicate = edge_tts.Communicate(clean_text, "en-IN-NeerjaNeural")
 
-        if not clean_text.strip():
-            clean_text = "I am here with you."
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_audio:
+        temp_path = temp_audio.name
 
-        lower = clean_text.lower()
+    await communicate.save(temp_path)
 
-        if any(word in lower for word in ["sad", "lonely", "cry", "hurt"]):
-            voice = "en-IN-NeerjaNeural"
+    with open(temp_path, "rb") as audio_file:
+        audio_data = audio_file.read()
 
-        elif any(word in lower for word in ["stress", "anxious", "worried", "panic"]):
-            voice = "en-US-JennyNeural"
+    os.remove(temp_path)
 
-        elif any(word in lower for word in ["happy", "excited", "great", "awesome"]):
-            voice = "en-US-AriaNeural"
+    return Response(content=audio_data, media_type="audio/mpeg")
 
-        elif any(word in lower for word in ["angry", "frustrated", "mad"]):
-            voice = "en-GB-SoniaNeural"
-
-        else:
-            voice = "en-IN-NeerjaNeural"
-
-        communicate = edge_tts.Communicate(clean_text, voice)
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_audio:
-            temp_path = temp_audio.name
-
-        await communicate.save(temp_path)
-
-        with open(temp_path, "rb") as audio_file:
-            audio_data = audio_file.read()
-
-        os.remove(temp_path)
-
-        return Response(content=audio_data, media_type="audio/mpeg")
-
-    except Exception as e:
-        print("EDGE TTS ERROR:", str(e))
-        return {"error": str(e)}
-    
-    from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
-import asyncio
-import threading
-
-import tempfile
-
-
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Hi, I'm Ira. Talk to me ❤️")
-
-async def get_ira_reply(message):
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": "openai/gpt-4o-mini",
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "You are Ira, a warm emotional AI mentor. Speak naturally, kindly, and supportively."
-                        },
-                        {
-                            "role": "user",
-                            "content": message
-                        }
-                    ]
-                }
-            )
-
-            data = response.json()
-            print(data)
-
-            return data["choices"][0]["message"]["content"]
-
-    except Exception as e:
-        print("IRA ERROR:", e)
-        return "I'm here with you ❤️ Tell me what's on your mind."
 
 @app.post("/telegram")
 async def telegram_webhook(request: Request):
@@ -232,22 +103,22 @@ async def telegram_webhook(request: Request):
 
     message = data.get("message", {})
     chat_id = message.get("chat", {}).get("id")
-    user_message = message.get("text", "")
+    text = message.get("text", "")
 
-    if not chat_id or not user_message:
+    if not chat_id:
         return {"ok": True}
 
-    reply = get_ira_reply(text)
+    if text == "/start":
+        reply = "Hi, I'm Ira. Talk to me ❤️"
+    elif text:
+        reply = get_ira_reply(text)
+    else:
+        reply = "Send me a text message for now."
 
-    telegram_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-
-    async with httpx.AsyncClient() as client:
-        await client.post(telegram_url, json={
-            "chat_id": chat_id,
-            "text": reply
-        })
+    requests.post(
+        f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+        json={"chat_id": chat_id, "text": reply},
+        timeout=10,
+    )
 
     return {"ok": True}
-
-
-
