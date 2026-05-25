@@ -3,6 +3,7 @@ import os
 import tempfile
 import requests
 import edge_tts
+import json
 
 from fastapi import FastAPI, Request
 from pydantic import BaseModel
@@ -20,6 +21,40 @@ app.add_middleware(
 )
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+import json
+
+MEMORY_FILE = "memory.json"
+
+def load_memory():
+    if not os.path.exists(MEMORY_FILE):
+        return {}
+
+    try:
+        with open(MEMORY_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return {}
+
+def save_memory(memory):
+    with open(MEMORY_FILE, "w") as f:
+        json.dump(memory, f)
+
+def store_memory(user_id, text):
+    memory = load_memory()
+
+    if user_id not in memory:
+        memory[user_id] = []
+
+    memory[user_id].append(text)
+
+    if len(memory[user_id]) > 10:
+        memory[user_id] = memory[user_id][-10:]
+
+    save_memory(memory)
+
+def retrieve_memories(user_id):
+    memory = load_memory()
+    return "\n".join(memory.get(user_id, []))
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 
@@ -36,8 +71,9 @@ async def root():
     return {"message": "Backend running"}
 
 
-def get_ira_reply(user_message: str):
+def get_ira_reply(user_id: str, user_message: str):
     try:
+        memories = retrieve_memories(user_id)
         res = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={
@@ -49,13 +85,16 @@ def get_ira_reply(user_message: str):
                 "messages": [
                     {
                         "role": "system",
-                         "content": """
+                         "content": f"""
 You are Ira, a warm emotional AI friend.
-Reply like a real close friend, not a therapist.
+
+Known memory about this user:
+{memories}
+
+Reply like a real close friend.
 Keep replies short: 2 to 5 lines only.
 Be caring, natural, supportive, and human.
-Ask one gentle follow-up question when needed.
-No markdown. No long paragraphs.
+No markdown.
 """
                     },
                     {
@@ -121,7 +160,9 @@ async def telegram_webhook(request: Request):
     if text == "/start":
         reply = "Hi, I'm Ira. Talk to me ❤️"
     elif text:
-        reply = get_ira_reply(text)
+        reply = get_ira_reply(str(chat_id), text)
+        store_memory(str(chat_id), text)
+        store_memory(str(chat_id), reply)
     else:
         reply = "Send me a text message for now."
 
