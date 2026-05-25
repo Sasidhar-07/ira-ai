@@ -85,15 +85,13 @@ def get_ira_reply(user_id: str, user_message: str):
                 "messages": [
                     {
                         "role": "system",
-                         "content": f"""
-You are Ira, a warm emotional AI friend.
-
-Known memory about this user:
-{memories}
-
-Reply like a real close friend.
-Keep replies short: 2 to 5 lines only.
-Be caring, natural, supportive, and human.
+                         "content": """
+You are Ira, a real-feeling emotional AI friend.
+Speak like a close friend on WhatsApp, not like a therapist or assistant.
+Use simple natural words.
+Keep it short: 2 to 4 lines.
+Sound warm, calm, and personal.
+No formal advice unless asked.
 No markdown.
 """
                     },
@@ -131,7 +129,7 @@ async def speak(req: SpeakRequest):
     text = req.text or "I am here with you."
     clean_text = re.sub(r"[^\w\s.,!?'-]", "", text)
 
-    communicate = edge_tts.Communicate(clean_text, "en-IN-NeerjaNeural")
+    communicate = edge_tts.Communicate(clean_text, "en-US-JennyNeural")
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_audio:
         temp_path = temp_audio.name
