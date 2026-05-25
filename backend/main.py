@@ -145,6 +145,28 @@ async def speak(req: SpeakRequest):
 
     return Response(content=audio_data, media_type="audio/mpeg")
 
+async def make_voice_file(text: str):
+    clean_text = re.sub(r"[^\w\s.,!?'-]", "", text)
+
+    if not clean_text.strip():
+        clean_text = "I am here with you."
+
+    communicate = edge_tts.Communicate(
+        clean_text,
+        "en-IN-NeerjaNeural"
+    )
+
+    temp_audio = tempfile.NamedTemporaryFile(
+        delete=False,
+        suffix=".mp3"
+    )
+
+    temp_path = temp_audio.name
+    temp_audio.close()
+
+    await communicate.save(temp_path)
+
+    return temp_path
 
 @app.post("/telegram")
 async def telegram_webhook(request: Request):
@@ -166,10 +188,24 @@ async def telegram_webhook(request: Request):
     else:
         reply = "Send me a text message for now."
 
+    # send text reply
     requests.post(
         f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
         json={"chat_id": chat_id, "text": reply},
         timeout=10,
     )
+
+    # send voice reply
+    voice_path = await make_voice_file(reply)
+
+    with open(voice_path, "rb") as audio:
+        requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendAudio",
+            data={"chat_id": chat_id},
+            files={"audio": audio},
+            timeout=30,
+        )
+
+    os.remove(voice_path)
 
     return {"ok": True}
