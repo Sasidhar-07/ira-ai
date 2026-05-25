@@ -45,31 +45,34 @@ def get_ira_reply(user_message: str):
                 "Content-Type": "application/json",
             },
             json={
-                "model": "openai/gpt-4o-mini"
+                "model": "openai/gpt-4o-mini",
                 "messages": [
                     {
                         "role": "system",
-                        "content": "You are Ira, a warm emotional AI friend. Reply like a real close friend: caring, natural, short, and human. No markdown."
+                        "content": "You are Ira, a warm emotional AI mentor. Reply like a caring friend."
                     },
-                    {"role": "user", "content": user_message},
+                    {
+                        "role": "user",
+                        "content": user_message
+                    }
                 ],
                 "max_tokens": 120,
-                "temperature": 0.8,
+                "temperature": 0.8
             },
-            timeout=30,
+            timeout=30
         )
 
         data = res.json()
         print("OPENROUTER:", data)
 
-        if "choices" not in data:
-            return "I'm here with you. Tell me what happened."
+        if "choices" in data:
+            return data["choices"][0]["message"]["content"]
 
-        return data["choices"][0]["message"]["content"]
+        return "I'm here with you. Tell me what's on your mind."
 
     except Exception as e:
         print("IRA ERROR:", e)
-        return "I'm here with you. Tell me what happened."
+        return "I'm here with you. Tell me what's on your mind."
 
 
 @app.post("/chat")
