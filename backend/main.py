@@ -49,7 +49,7 @@ def get_ira_reply(user_message: str):
                 "messages": [
                     {
                         "role": "system",
-                        "content": "You are Ira, a warm emotional AI mentor. Reply like a caring friend."
+                        "content": "You are Ira, a warm emotional AI friend. Reply naturally like a close caring friend. Keep responses short (2-5 lines), conversational, emotionally supportive, human, not robotic."
                     },
                     {
                         "role": "user",
