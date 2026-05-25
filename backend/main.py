@@ -200,7 +200,7 @@ async def telegram_webhook(request: Request):
         requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendAudio",
             data={"chat_id": chat_id},
-            files={"voice": audio},
+            files={"audio": audio},
             timeout=30,
         )
 
