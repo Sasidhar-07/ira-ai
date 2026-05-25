@@ -20,7 +20,7 @@ app.add_middleware(
 )
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-TELEGRAM_BOT_TOKEN = os.getenv("7611366225:AAFVaZUFT7YUBaOB5CWZPP8Gxn0nkd-JlsA")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 
 class ChatRequest(BaseModel):
@@ -45,7 +45,7 @@ def get_ira_reply(user_message: str):
                 "Content-Type": "application/json",
             },
             json={
-                "model": "deepseek/deepseek-chat-v3-0324:free",
+                "model": "openai/gpt-4o-mini"
                 "messages": [
                     {
                         "role": "system",
